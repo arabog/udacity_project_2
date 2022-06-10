@@ -1,20 +1,13 @@
 Description: >
-    Udacity Project 2 
-
-
+    Carlos Rivas / Udacity 2019
 Parameters:
-  # Paramenters are entirely optional.
-  # but using them will make your cloudformation templates more reusable
-  # use them for things that may change over time, such as instance type,
-  # VPCs and so on.
-  EnvironmentName:
-    Description: An environment name that will be prefixed to resource names
-    Type: String
+
+    EnvironmentName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
 
 Resources:
-  # instace profile contains the IAM Role name(s) that we want to associate to our auto scaling EC2 Servers
-  # never give too much permissions to your EC2 instances! if they get hacked, the permissions get hacked also!
-  # in this example, I create a Role called UdacityS3ReadOnlyC2 and just give it a policy of S3 Read-Only Access
+
   RoleForUdacityS3ReadOnlyEC2: 
     Type: "AWS::IAM::Role"
     Properties:
@@ -28,7 +21,7 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
   
   ProfileWithRolesForOurApp:
     Type: AWS::IAM::InstanceProfile
@@ -36,7 +29,6 @@ Resources:
       Roles:
         - !Ref RoleForUdacityS3ReadOnlyEC2
 
-  # Security grps
   LBSecGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -44,22 +36,16 @@ Resources:
       VpcId:
         Fn::ImportValue:
           !Sub "${EnvironmentName}-VPCID"
-
-      # inbound
       SecurityGroupIngress:
       - IpProtocol: tcp
         FromPort: 80
         ToPort: 80
         CidrIp: 0.0.0.0/0
-
-      # outbound
       SecurityGroupEgress:
       - IpProtocol: tcp
         FromPort: 80
         ToPort: 80
         CidrIp: 0.0.0.0/0
-
-  # private servers
   WebServerSecGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -72,20 +58,15 @@ Resources:
         FromPort: 80
         ToPort: 80
         CidrIp: 0.0.0.0/0
-
       - IpProtocol: tcp
         FromPort: 22
         ToPort: 22
         CidrIp: 0.0.0.0/0
-
       SecurityGroupEgress:
       - IpProtocol: tcp
         FromPort: 0
         ToPort: 65535
         CidrIp: 0.0.0.0/0
-
-
-# Launch Configuratn  (AutoScaling)
   WebAppLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
@@ -96,36 +77,19 @@ Resources:
           apt-get install apache2 -y
           systemctl start apache2.service
           cd /var/www/html
-          echo "Udacity Demo Web Server Up and Running!" > index.html
-
-          #!/bin/bash
-          # Install docker
-          apt-get update
-          apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          add-apt-repository \
-          "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-          $(lsb_release -cs) \
-          stable"
-
-          apt-get update -y
-          apt-get install apache2 -y
-          systemctl start apache2.service
-          cd /var/www/html
-          echo "Udacity Demo Web Server Up and Running!" > index.html
+          echo "“It works! Udagram, Udacity!" > index.html
 
       # ToDo: AMI ID of Ubuntu Linux machine. Too get one, try creating a VM from the web console. 
-      ImageId: ami-0022f774911c1d690
-
+      ImageId: ami-0747bdcabd34c712a
+      # ToDo: Change the key-pair name, as applicable to you. 
+      # KeyName: nd9990_keypair
       SecurityGroups:
       - Ref: WebServerSecGroup
-      InstanceType: t2.micro
+      InstanceType: t3.medium
       BlockDeviceMappings:
       - DeviceName: "/dev/sdk"
         Ebs:
           VolumeSize: '10'
-
-  # AutoScaling grp
   WebAppGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -138,9 +102,6 @@ Resources:
       MaxSize: '5'
       TargetGroupARNs:
       - Ref: WebAppTargetGroup
-
-
-# LoadBalancer
   WebAppLB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -149,8 +110,6 @@ Resources:
       - Fn::ImportValue: !Sub "${EnvironmentName}-PUB2-SN"
       SecurityGroups:
       - Ref: LBSecGroup
-
-# Listener
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -162,8 +121,6 @@ Resources:
         Ref: WebAppLB
       Port: '80'
       Protocol: HTTP
-
-  # ListenerRule
   ALBListenerRule:
       Type: AWS::ElasticLoadBalancingV2::ListenerRule
       Properties:
@@ -175,9 +132,7 @@ Resources:
           Values: [/]
         ListenerArn: !Ref 'Listener'
         Priority: 1
-
-  # TargetGrp: deals with un/healthiness
-  WebAppTargetGroup: 
+  WebAppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -185,38 +140,22 @@ Resources:
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 8
       HealthyThresholdCount: 2
-      Port: 8080
+      Port: 80
       Protocol: HTTP
       UnhealthyThresholdCount: 5
       VpcId: 
         Fn::ImportValue:
           Fn::Sub: "${EnvironmentName}-VPCID"
 
-Outputs: 
-  LoadBalancerDNSName:
-    Description: The DNSName of the load balancer
-    Value: https://project2-hugb.s3.amazonaws.com/index.html
-    # Value: !GetAtt BackupLoadBalancer.DNSName
-#     Condition: CreateProdResources
-#   InstanceID:
-#     Description: The Instance ID
-#     Value: !Ref EC2Instance
 
-  # This is also optional.
-  # Bonus points for useful outputs!
-  # for example, if you create a Load Balancer
-  # it's nice to output the URL to it here, so that we don't have to go to the console to get it.
+Outputs:
 
-# Sample UserData
-# When creating your Launch Configuration, you may need a UserData script
-# here's one that you can use for Ubuntu Linux that will:
-# Install Apache Web Server, Start it, and create an index.html that will be displayed
-# when you visit the IP address of this server with your web browser
-#Here it is:
-#
-#          #!/bin/bash
-#          apt-get update -y
-#          apt-get install apache2 -y
-#          systemctl start apache2.service
-#          cd /var/www/html
-#          echo "Udacity Demo Web Server Up and Running!" > index.html
+# output for the load balancer details
+  LoadBalancer:
+      Description: A reference to the Application Load Balancer
+      Value: !Ref WebAppLB
+
+  # output for load balancer URL
+  LoadBalancerUrl:
+      Description: The URL of the ALB
+      Value: !Join [ "", [ "http://", !GetAtt WebAppLB.DNSName ] ]
