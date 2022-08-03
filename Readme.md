@@ -1,4 +1,4 @@
-#Scenario
+# Scenario
 Your company is creating an Instagram clone called Udagram.
 
 Developers want to deploy a new application to the AWS infrastructure.
